@@ -541,7 +541,7 @@ export function SearchResults({
           <Button 
             type="submit" 
             size="sm" 
-            disabled={isSearching || (pathSearch.trim() && !jsonData)}
+            disabled={isSearching || (!!pathSearch.trim() && !jsonData)}
           >
             Search
           </Button>
