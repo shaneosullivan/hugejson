@@ -60,7 +60,7 @@ export function SearchResults({
     if (content === lastContentRef.current) {
       return;
     }
-    
+
     lastContentRef.current = content;
 
     const computeAllLinePaths = () => {
@@ -492,7 +492,9 @@ export function SearchResults({
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <Input
                 type="text"
-                placeholder="Search text content..."
+                placeholder={
+                  focusedInput === "path" ? "Text" : "Search text content..."
+                }
                 value={textSearch}
                 onFocus={() => setFocusedInput("text")}
                 onBlur={() => setFocusedInput(null)}
@@ -528,7 +530,11 @@ export function SearchResults({
               <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <Input
                 type="text"
-                placeholder="Search JSON path (e.g., user.name, items[0])..."
+                placeholder={
+                  focusedInput === "text"
+                    ? "JSON path"
+                    : "Search JSON path (e.g., user.name, items[0])..."
+                }
                 value={pathSearch}
                 onFocus={() => setFocusedInput("path")}
                 onBlur={() => setFocusedInput(null)}
