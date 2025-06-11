@@ -5,9 +5,8 @@ import type React from "react"
 import { useState, useRef, useCallback, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Upload, Download, Code, Minimize2, Maximize2, Copy, FileText, Zap, AlertTriangle } from "lucide-react"
-import { SimpleJsonTree } from "./components/simple-json-tree"
-import { JsonSearch } from "./components/json-search"
+import { Upload, Download, Code, Copy, FileText, Zap, AlertTriangle } from "lucide-react"
+import { SearchResults } from "./components/search-results"
 import { Logo } from "./components/logo"
 
 // Worker code as strings (same as before)
@@ -72,111 +71,6 @@ self.onmessage = (e) => {
 }
 `
 
-const jsonSearchWorkerCode = `
-self.onmessage = (e) => {
-  const { type, data, searchTerm, caseSensitive = false, fullWord = false } = e.data
-
-  try {
-    switch (type) {
-      case "SEARCH_JSON":
-        const matches = findMatches(data, searchTerm, caseSensitive, fullWord)
-        self.postMessage({
-          type: "SEARCH_SUCCESS",
-          matches: matches,
-          count: matches.length,
-        })
-        break
-
-      default:
-        throw new Error(\`Unknown message type: \${type}\`)
-    }
-  } catch (error) {
-    self.postMessage({
-      type: "SEARCH_ERROR",
-      error: error.message,
-    })
-  }
-}
-
-function findMatches(obj, searchTerm, caseSensitive, fullWord) {
-  if (!searchTerm || !obj) return []
-
-  const matches = []
-  const searchTermToUse = caseSensitive ? searchTerm : searchTerm.toLowerCase()
-
-  function matchesText(text, searchTerm, caseSensitive, fullWord) {
-    const textToSearch = caseSensitive ? text : text.toLowerCase()
-
-    if (fullWord) {
-      const regex = new RegExp(\`\\\\b\${escapeRegExp(searchTerm)}\\\\b\`, caseSensitive ? "g" : "gi")
-      return regex.test(textToSearch)
-    } else {
-      return textToSearch.includes(searchTerm)
-    }
-  }
-
-  function escapeRegExp(string) {
-    return string
-      .replace(/\\\\/g, "\\\\\\\\")
-      .replace(/\\./g, "\\\\.")
-      .replace(/\\*/g, "\\\\*")
-      .replace(/\\+/g, "\\\\+")
-      .replace(/\\?/g, "\\\\?")
-      .replace(/\\^/g, "\\\\^")
-      .replace(/\\$/g, "\\\\$")
-      .replace(/\\{/g, "\\\\{")
-      .replace(/\\}/g, "\\\\}")
-      .replace(/\\(/g, "\\\\(")
-      .replace(/\\)/g, "\\\\)")
-      .replace(/\\|/g, "\\\\|")
-      .replace(/\\[/g, "\\\\[")
-      .replace(/\\]/g, "\\\\]")
-  }
-
-  function searchInValue(value, path, key = null) {
-    // Check if key matches (for object properties)
-    if (key !== null && typeof key === "string") {
-      if (matchesText(key, searchTermToUse, caseSensitive, fullWord)) {
-        matches.push({
-          path: path,
-          value: key,
-          type: "key",
-        })
-      }
-    }
-
-    // Check if current value matches
-    if (value !== null && value !== undefined) {
-      const valueStr = String(value)
-      if (matchesText(valueStr, searchTermToUse, caseSensitive, fullWord)) {
-        matches.push({
-          path: path,
-          value: value,
-          type: typeof value,
-        })
-      }
-    }
-
-    // Recursively search in objects and arrays
-    if (typeof value === "object" && value !== null) {
-      if (Array.isArray(value)) {
-        value.forEach((item, index) => {
-          const itemPath = path === "root" ? \`[\${index}]\` : \`\${path}[\${index}]\`
-          searchInValue(item, itemPath, index)
-        })
-      } else {
-        Object.keys(value).forEach((objKey) => {
-          const keyPath = path === "root" ? objKey : \`\${path}.\${objKey}\`
-          searchInValue(value[objKey], keyPath, objKey)
-        })
-      }
-    }
-  }
-
-  searchInValue(obj, "root")
-  return matches
-}
-`
 
 function createWorkerFromCode(code: string): Worker {
   const blob = new Blob([code], { type: "application/javascript" })
@@ -189,34 +83,22 @@ export default function JsonViewer() {
   const [indentType, setIndentType] = useState("2-spaces")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [collapsedLevels, setCollapsedLevels] = useState<Set<number>>(new Set())
-  const [collapseLevel, setCollapseLevel] = useState("0")
   const [isDragging, setIsDragging] = useState(false)
-  const [isSearchVisible, setIsSearchVisible] = useState(false)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [searchMatches, setSearchMatches] = useState<any[]>([])
-  const [currentMatchIndex, setCurrentMatchIndex] = useState(0)
-  const [isSearching, setIsSearching] = useState(false)
-  const [navigateToMatch, setNavigateToMatch] = useState<number | null>(null)
   const [jsonStats, setJsonStats] = useState<{ size: number; nodes: number } | null>(null)
-  const [isNavigating, setIsNavigating] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const parserWorkerRef = useRef<Worker | null>(null)
   const formatterWorkerRef = useRef<Worker | null>(null)
-  const searchWorkerRef = useRef<Worker | null>(null)
 
   // Initialize workers
   useEffect(() => {
     try {
       parserWorkerRef.current = createWorkerFromCode(jsonParserWorkerCode)
       formatterWorkerRef.current = createWorkerFromCode(jsonFormatterWorkerCode)
-      searchWorkerRef.current = createWorkerFromCode(jsonSearchWorkerCode)
 
       const parserWorker = parserWorkerRef.current
       const formatterWorker = formatterWorkerRef.current
-      const searchWorker = searchWorkerRef.current
 
       parserWorker.onmessage = (e) => {
         const { type, data, error } = e.data
@@ -250,19 +132,6 @@ export default function JsonViewer() {
         }
       }
 
-      searchWorker.onmessage = (e) => {
-        const { type, matches, count, error } = e.data
-        setIsSearching(false)
-
-        if (type === "SEARCH_SUCCESS") {
-          setSearchMatches(matches || [])
-          setCurrentMatchIndex(0) // Reset to first match
-        } else if (type === "SEARCH_ERROR") {
-          console.error("Search error:", error)
-          setSearchMatches([])
-          setCurrentMatchIndex(0)
-        }
-      }
 
       parserWorker.onerror = (error) => {
         console.error("Parser worker error:", error)
@@ -276,11 +145,6 @@ export default function JsonViewer() {
         setError("Formatter error occurred")
       }
 
-      searchWorker.onerror = (error) => {
-        console.error("Search worker error:", error)
-        setIsSearching(false)
-        setSearchMatches([])
-      }
     } catch (error) {
       console.error("Failed to initialize workers:", error)
       setError("Failed to initialize workers")
@@ -290,7 +154,6 @@ export default function JsonViewer() {
       try {
         parserWorkerRef.current?.terminate()
         formatterWorkerRef.current?.terminate()
-        searchWorkerRef.current?.terminate()
       } catch (error) {
         console.error("Error terminating workers:", error)
       }
@@ -406,20 +269,6 @@ export default function JsonViewer() {
     }
   }, [leftContent])
 
-  const handleCollapseAll = useCallback(() => {
-    const level = Number.parseInt(collapseLevel)
-    const newCollapsedLevels = new Set<number>()
-
-    for (let i = level; i <= 100; i++) {
-      newCollapsedLevels.add(i)
-    }
-
-    setCollapsedLevels(newCollapsedLevels)
-  }, [collapseLevel])
-
-  const handleExpandAll = useCallback(() => {
-    setCollapsedLevels(new Set())
-  }, [])
 
   const handleCopyFormatted = useCallback(() => {
     if (rightContent) {
@@ -433,61 +282,32 @@ export default function JsonViewer() {
     }
   }, [rightContent, indentType])
 
-  // Search functionality
-  const handleSearch = useCallback(
-    (term: string, caseSensitive: boolean, fullWord: boolean) => {
-      setSearchTerm(term)
-      setCurrentMatchIndex(0)
-      setNavigateToMatch(null)
-
-      if (term.trim() && rightContent) {
-        setIsSearching(true)
-        try {
-          searchWorkerRef.current?.postMessage({
-            type: "SEARCH_JSON",
-            data: rightContent,
-            searchTerm: term,
-            caseSensitive: caseSensitive,
-            fullWord: fullWord,
-          })
-        } catch (error) {
-          setIsSearching(false)
-          setSearchMatches([])
-        }
-      } else {
-        setSearchMatches([])
-        setIsSearching(false)
+  // Scroll to line functionality
+  const handleScrollToLine = useCallback((lineNumber: number) => {
+    if (textareaRef.current) {
+      const textarea = textareaRef.current
+      const lines = textarea.value.split('\n')
+      
+      if (lineNumber > 0 && lineNumber <= lines.length) {
+        // Calculate the character position for the start of the target line
+        const targetLineStart = lines.slice(0, lineNumber - 1).join('\n').length + (lineNumber > 1 ? 1 : 0)
+        
+        // Set cursor position and scroll to line
+        textarea.focus()
+        textarea.setSelectionRange(targetLineStart, targetLineStart)
+        
+        // Calculate approximate scroll position
+        const lineHeight = 20 // Approximate line height in pixels
+        const scrollTop = (lineNumber - 1) * lineHeight
+        
+        // Scroll to the line with some offset to center it
+        textarea.scrollTop = Math.max(0, scrollTop - textarea.clientHeight / 2)
       }
-    },
-    [rightContent],
-  )
-
-  const handleNavigateToMatch = useCallback(
-    (index: number) => {
-      if (searchMatches.length > 0) {
-        setIsNavigating(true)
-        setCurrentMatchIndex(index)
-        setNavigateToMatch(index)
-      }
-    },
-    [searchMatches.length],
-  )
-
-  const handleNavigationComplete = useCallback(() => {
-    setNavigateToMatch(null)
-    setIsNavigating(false)
-  }, [])
-
-  const handleClearSearch = useCallback(() => {
-    setSearchTerm("")
-    setSearchMatches([])
-    setCurrentMatchIndex(0)
-    setNavigateToMatch(null)
-    setIsSearching(false)
+    }
   }, [])
 
   // Drag and drop handlers
-  const handleDragOver = useCallback((e: React.DragEvent<HTMLTextAreaElement>) => {
+  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     setIsDragging(true)
   }, [])
@@ -497,7 +317,7 @@ export default function JsonViewer() {
   }, [])
 
   const handleDrop = useCallback(
-    (e: React.DragEvent<HTMLTextAreaElement>) => {
+    (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault()
       setIsDragging(false)
 
@@ -577,7 +397,7 @@ export default function JsonViewer() {
         {/* Main Content */}
         <div className="flex-1 flex overflow-hidden">
           {/* Left Panel */}
-          <div className="flex-1 flex flex-col border-r border-gray-200/50 dark:border-gray-700/50 relative">
+          <div className="w-1/2 flex flex-col border-r border-gray-200/50 dark:border-gray-700/50 relative">
             <div className="p-3 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-b border-gray-200/50 dark:border-gray-700/50 flex justify-between items-center">
               <div className="flex items-center space-x-2">
                 <FileText className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
@@ -629,7 +449,7 @@ export default function JsonViewer() {
                 value={leftContent}
                 onChange={(e) => handleLeftContentChange(e.target.value)}
                 placeholder="Paste your JSON here, drag & drop a JSON file, or click 'Load File' to get started..."
-                className="absolute inset-0 p-4 font-mono text-sm resize-none border-none outline-none w-full h-full bg-transparent dark:text-gray-100 placeholder:text-gray-400"
+                className="absolute inset-0 p-4 font-mono text-sm resize-none border-none outline-none w-full h-full bg-transparent dark:text-gray-100 placeholder:text-gray-400 whitespace-nowrap overflow-x-auto"
                 spellCheck={false}
               />
               {isDragging && (
@@ -646,42 +466,6 @@ export default function JsonViewer() {
 
           {/* Center Controls */}
           <div className="w-20 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-r border-gray-200/50 dark:border-gray-700/50 flex flex-col items-center py-6 space-y-4">
-            <div className="flex flex-col items-center space-y-2">
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={handleCollapseAll}
-                disabled={!rightContent}
-                title="Collapse All Levels"
-                className="hover:bg-orange-50 hover:text-orange-600"
-              >
-                <Minimize2 className="w-4 h-4" />
-              </Button>
-              <Select value={collapseLevel} onValueChange={setCollapseLevel}>
-                <SelectTrigger className="h-7 w-12 text-xs bg-white/80 backdrop-blur-sm border-gray-200/50">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="0">L0</SelectItem>
-                  <SelectItem value="1">L1</SelectItem>
-                  <SelectItem value="2">L2</SelectItem>
-                  <SelectItem value="3">L3</SelectItem>
-                  <SelectItem value="4">L4</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={handleExpandAll}
-              disabled={!rightContent}
-              title="Expand All"
-              className="hover:bg-green-50 hover:text-green-600"
-            >
-              <Maximize2 className="w-4 h-4" />
-            </Button>
-
             <Button
               size="sm"
               variant="ghost"
@@ -701,27 +485,12 @@ export default function JsonViewer() {
           </div>
 
           {/* Right Panel */}
-          <div className="flex-1 flex flex-col bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm">
+          <div className="w-1/2 flex flex-col bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm">
             <div className="p-3 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-b border-gray-200/50 dark:border-gray-700/50 flex justify-between items-center">
               <div className="flex items-center space-x-2">
                 <div className="w-3 h-3 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full"></div>
-                <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">JSON Tree View</h2>
-                {searchTerm && (
-                  <span className="text-xs text-gray-500 dark:text-gray-400 bg-yellow-100 dark:bg-yellow-900/30 px-2 py-1 rounded">
-                    Filtered
-                  </span>
-                )}
+                <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Search Results</h2>
               </div>
-              <JsonSearch
-                onSearch={handleSearch}
-                onNavigateToMatch={handleNavigateToMatch}
-                onClear={handleClearSearch}
-                matchCount={searchMatches.length}
-                currentMatch={currentMatchIndex}
-                isVisible={isSearchVisible}
-                onToggle={() => setIsSearchVisible(!isSearchVisible)}
-                isSearching={isSearching}
-              />
             </div>
             <div className="flex-1 overflow-hidden">
               {error && (
@@ -733,39 +502,11 @@ export default function JsonViewer() {
                   <p className="text-red-600 dark:text-red-300 text-sm mt-1">{error}</p>
                 </div>
               )}
-              {rightContent ? (
-                <div className="relative h-full">
-                  <SimpleJsonTree
-                    data={rightContent}
-                    collapsedLevels={collapsedLevels}
-                    searchMatches={searchMatches}
-                    currentMatchIndex={currentMatchIndex}
-                    navigateToMatch={navigateToMatch}
-                    onNavigationComplete={handleNavigationComplete}
-                    isNavigating={isNavigating}
-                  />
-                  {isNavigating && (
-                    <div className="absolute inset-0 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm flex items-center justify-center z-50">
-                      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 flex items-center space-x-3 border border-gray-200 dark:border-gray-700">
-                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Navigating to match...
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
-                  {!error && (
-                    <div className="text-center">
-                      <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
-                      <p className="text-lg font-medium mb-2">Ready to view JSON</p>
-                      <p className="text-sm">Enter valid JSON in the left panel to see the tree view</p>
-                    </div>
-                  )}
-                </div>
-              )}
+              <SearchResults
+                content={leftContent}
+                jsonData={rightContent}
+                onResultClick={handleScrollToLine}
+              />
             </div>
           </div>
         </div>
