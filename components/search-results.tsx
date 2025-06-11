@@ -3,8 +3,20 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Hash, Copy, Check } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Search, Hash, Copy, Check, Code, HelpCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { HelpContent } from "./help-content";
 
 interface SearchResult {
   lineNumber: number;
@@ -27,16 +39,16 @@ export function SearchResults({
   jsonData,
   onResultClick,
 }: SearchResultsProps) {
-  const [textSearch, setTextSearch] = useState("");
-  const [pathSearch, setPathSearch] = useState("");
+  const [searchValue, setSearchValue] = useState("");
+  const [searchType, setSearchType] = useState<"text" | "path" | "jq">("text");
   const [results, setResults] = useState<SearchResult[]>([]);
+  const [jqResult, setJqResult] = useState<string>("");
   const [isSearching, setIsSearching] = useState(false);
   const [hoveredResult, setHoveredResult] = useState<number | null>(null);
   const [hoveredPath, setHoveredPath] = useState<string | null>(null);
   const [copiedPath, setCopiedPath] = useState<string | null>(null);
-  const [focusedInput, setFocusedInput] = useState<"text" | "path" | null>(
-    null
-  );
+  const [showHelp, setShowHelp] = useState(false);
+  const [helpTab, setHelpTab] = useState<"text" | "path" | "jq">("text");
   const { toast } = useToast();
 
   // Virtualization state
@@ -378,16 +390,96 @@ export function SearchResults({
     [jsonData, contentLines]
   );
 
+  // Global jq instance (loaded via script tag)
+  const jqInstanceRef = useRef<any>(null);
+
+  // Load jq-web module
+  useEffect(() => {
+    const loadJq = async () => {
+      if (jqInstanceRef.current || typeof window === 'undefined') return;
+
+      try {
+        // Load jq-web module and let it use default path resolution
+        // Next.js rewrites will redirect /_next/static/chunks/jq.wasm to /jq.wasm
+        const jqModule = await import("jq-web");
+        const jq = jqModule.default || jqModule;
+        
+        // jq-web exports the instance directly, not a factory function
+        jqInstanceRef.current = jq;
+        console.log("✅ jq-web loaded successfully", jq);
+      } catch (error) {
+        console.error("❌ Failed to load jq-web:", error);
+      }
+    };
+
+    loadJq();
+  }, []);
+
+  const performJqSearch = useCallback(
+    async (jqQuery: string) => {
+      if (!jqQuery.trim() || !jsonData) {
+        setJqResult("");
+        return;
+      }
+
+      setIsSearching(true);
+      try {
+        // Wait for jq to be loaded if it's not ready yet
+        let attempts = 0;
+        while (!jqInstanceRef.current && attempts < 20) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          attempts++;
+        }
+
+        if (!jqInstanceRef.current) {
+          throw new Error("jq-web failed to load");
+        }
+
+        const result = jqInstanceRef.current.json(jsonData, jqQuery);
+
+        // Convert result to string, preserving formatting
+        let resultString: string;
+        if (typeof result === "string") {
+          resultString = result;
+        } else {
+          resultString = JSON.stringify(result, null, 2);
+        }
+
+        setJqResult(resultString);
+        setResults([]); // Clear other search results when doing jq
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        setJqResult(`Error: ${errorMessage}`);
+        setResults([]);
+      }
+      setIsSearching(false);
+    },
+    [jsonData]
+  );
+
   const handleSearchSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
-      if (textSearch.trim()) {
-        performTextSearch(textSearch);
-      } else if (pathSearch.trim()) {
-        performPathSearch(pathSearch);
+      if (!searchValue.trim()) return;
+
+      if (searchType === "text") {
+        performTextSearch(searchValue);
+        setJqResult(""); // Clear jq results when doing other searches
+      } else if (searchType === "path") {
+        performPathSearch(searchValue);
+        setJqResult(""); // Clear jq results when doing other searches
+      } else if (searchType === "jq") {
+        performJqSearch(searchValue);
       }
     },
-    [textSearch, pathSearch, performTextSearch, performPathSearch]
+    [
+      searchValue,
+      searchType,
+      performTextSearch,
+      performPathSearch,
+      performJqSearch,
+    ]
   );
 
   // Handle mouse enter to get precomputed path
@@ -466,85 +558,101 @@ export function SearchResults({
     });
   }, []);
 
+
   return (
     <div className="flex flex-col h-full">
-      {/* Search Inputs */}
+      {/* Search Input */}
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-        <form onSubmit={handleSearchSubmit} className="flex gap-3">
-          {/* Text Search */}
-          <div
-            className="flex-1 relative transition-all duration-200 ease-in-out"
-            style={{
-              flex:
-                focusedInput === "text"
-                  ? "1"
-                  : focusedInput === "path"
-                  ? "0 0 200px"
-                  : "1",
-            }}
-          >
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <Input
-              type="text"
-              placeholder={
-                focusedInput === "path" ? "Text" : "Search text content..."
-              }
-              value={textSearch}
-              onFocus={() => setFocusedInput("text")}
-              onBlur={() => setFocusedInput(null)}
-              onChange={(e) => {
-                setTextSearch(e.target.value);
-                // Clear path search when typing in text search
-                if (e.target.value && pathSearch) {
-                  setPathSearch("");
+        <form onSubmit={handleSearchSubmit} className="space-y-3">
+          {/* Single Search Input */}
+          <div className="flex gap-3">
+            <div className="flex-1 relative">
+              {searchType === "text" && (
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              )}
+              {searchType === "path" && (
+                <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              )}
+              {searchType === "jq" && (
+                <Code className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              )}
+              <Input
+                type="text"
+                placeholder={
+                  searchType === "text"
+                    ? "Search text content..."
+                    : searchType === "path"
+                    ? "JSON path (e.g., user.name, items[0])..."
+                    : "jq query (e.g., .[] | select(.age > 25))..."
                 }
-              }}
-              className="pl-10"
-            />
+                value={searchValue}
+                onChange={(e) => setSearchValue(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={
+                isSearching ||
+                ((searchType === "path" || searchType === "jq") && !jsonData)
+              }
+            >
+              Search
+            </Button>
           </div>
 
-          {/* Path Search */}
-          <div
-            className="flex-1 relative transition-all duration-200 ease-in-out"
-            style={{
-              flex:
-                focusedInput === "path"
-                  ? "1"
-                  : focusedInput === "text"
-                  ? "0 0 200px"
-                  : "1",
-            }}
-          >
-            <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <Input
-              type="text"
-              placeholder={
-                focusedInput === "text"
-                  ? "JSON path"
-                  : "Search JSON path (e.g., user.name, items[0])..."
+          {/* Search Type Radio Buttons */}
+          <div className="flex items-center justify-between">
+            <RadioGroup
+              value={searchType}
+              onValueChange={(value: "text" | "path" | "jq") =>
+                setSearchType(value)
               }
-              value={pathSearch}
-              onFocus={() => setFocusedInput("path")}
-              onBlur={() => setFocusedInput(null)}
-              onChange={(e) => {
-                setPathSearch(e.target.value);
-                // Clear text search when typing in path search
-                if (e.target.value && textSearch) {
-                  setTextSearch("");
-                }
-              }}
-              className="pl-10"
-            />
+              className="flex gap-6"
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="text" id="text" />
+                <Label htmlFor="text" className="text-sm font-medium">
+                  Text
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="path" id="path" />
+                <Label htmlFor="path" className="text-sm font-medium">
+                  JSON Path
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="jq" id="jq" />
+                <Label htmlFor="jq" className="text-sm font-medium">
+                  JQ
+                </Label>
+              </div>
+            </RadioGroup>
+            
+            <Dialog open={showHelp} onOpenChange={setShowHelp}>
+              <DialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                >
+                  <HelpCircle className="w-4 h-4 mr-1" />
+                  Help
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Search Help</DialogTitle>
+                  <DialogDescription>
+                    Learn how to use different search types to query your JSON data effectively.
+                  </DialogDescription>
+                </DialogHeader>
+                <HelpContent helpTab={helpTab} setHelpTab={setHelpTab} />
+              </DialogContent>
+            </Dialog>
           </div>
-
-          {/* Single Search Button */}
-          <Button 
-            type="submit" 
-            size="sm" 
-            disabled={isSearching || (!!pathSearch.trim() && !jsonData)}
-          >
-            Search
-          </Button>
         </form>
       </div>
 
@@ -556,12 +664,22 @@ export function SearchResults({
       >
         {isSearching ? (
           <div className="p-4 text-center text-gray-500">Searching...</div>
+        ) : jqResult ? (
+          <div className="p-4">
+            <div className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+              jq query result:
+            </div>
+            <Textarea
+              value={jqResult}
+              readOnly
+              className="font-mono text-sm min-h-[400px] resize-none bg-gray-50 dark:bg-gray-900"
+              placeholder="jq query results will appear here..."
+            />
+          </div>
         ) : results.length === 0 ? (
           <div className="p-4 text-center text-gray-500">
-            {textSearch.trim() && !isSearching
-              ? "Press Enter or click Search to find text results"
-              : pathSearch.trim() && !isSearching
-              ? "Press Enter or click Search to find path results"
+            {searchValue.trim() && !isSearching
+              ? `Press Enter or click Search to find ${searchType} results`
               : "Enter a search term to find results"}
           </div>
         ) : (
