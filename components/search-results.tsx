@@ -378,20 +378,16 @@ export function SearchResults({
     [jsonData, contentLines]
   );
 
-  const handleTextSearchSubmit = useCallback(
+  const handleSearchSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
-      performTextSearch(textSearch);
+      if (textSearch.trim()) {
+        performTextSearch(textSearch);
+      } else if (pathSearch.trim()) {
+        performPathSearch(pathSearch);
+      }
     },
-    [textSearch, performTextSearch]
-  );
-
-  const handlePathSearchSubmit = useCallback(
-    (e: React.FormEvent) => {
-      e.preventDefault();
-      performPathSearch(pathSearch);
-    },
-    [pathSearch, performPathSearch]
+    [textSearch, pathSearch, performTextSearch, performPathSearch]
   );
 
   // Handle mouse enter to get precomputed path
@@ -474,11 +470,10 @@ export function SearchResults({
     <div className="flex flex-col h-full">
       {/* Search Inputs */}
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-        <div className="flex gap-3">
+        <form onSubmit={handleSearchSubmit} className="flex gap-3">
           {/* Text Search */}
-          <form
-            onSubmit={handleTextSearchSubmit}
-            className="flex gap-2 transition-all duration-200 ease-in-out"
+          <div
+            className="flex-1 relative transition-all duration-200 ease-in-out"
             style={{
               flex:
                 focusedInput === "text"
@@ -488,35 +483,29 @@ export function SearchResults({
                   : "1",
             }}
           >
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                type="text"
-                placeholder={
-                  focusedInput === "path" ? "Text" : "Search text content..."
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <Input
+              type="text"
+              placeholder={
+                focusedInput === "path" ? "Text" : "Search text content..."
+              }
+              value={textSearch}
+              onFocus={() => setFocusedInput("text")}
+              onBlur={() => setFocusedInput(null)}
+              onChange={(e) => {
+                setTextSearch(e.target.value);
+                // Clear path search when typing in text search
+                if (e.target.value && pathSearch) {
+                  setPathSearch("");
                 }
-                value={textSearch}
-                onFocus={() => setFocusedInput("text")}
-                onBlur={() => setFocusedInput(null)}
-                onChange={(e) => {
-                  setTextSearch(e.target.value);
-                  // Clear path search when typing in text search
-                  if (e.target.value && pathSearch) {
-                    setPathSearch("");
-                  }
-                }}
-                className="pl-10"
-              />
-            </div>
-            <Button type="submit" size="sm" disabled={isSearching}>
-              Search
-            </Button>
-          </form>
+              }}
+              className="pl-10"
+            />
+          </div>
 
           {/* Path Search */}
-          <form
-            onSubmit={handlePathSearchSubmit}
-            className="flex gap-2 transition-all duration-200 ease-in-out"
+          <div
+            className="flex-1 relative transition-all duration-200 ease-in-out"
             style={{
               flex:
                 focusedInput === "path"
@@ -526,33 +515,37 @@ export function SearchResults({
                   : "1",
             }}
           >
-            <div className="flex-1 relative">
-              <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                type="text"
-                placeholder={
-                  focusedInput === "text"
-                    ? "JSON path"
-                    : "Search JSON path (e.g., user.name, items[0])..."
+            <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <Input
+              type="text"
+              placeholder={
+                focusedInput === "text"
+                  ? "JSON path"
+                  : "Search JSON path (e.g., user.name, items[0])..."
+              }
+              value={pathSearch}
+              onFocus={() => setFocusedInput("path")}
+              onBlur={() => setFocusedInput(null)}
+              onChange={(e) => {
+                setPathSearch(e.target.value);
+                // Clear text search when typing in path search
+                if (e.target.value && textSearch) {
+                  setTextSearch("");
                 }
-                value={pathSearch}
-                onFocus={() => setFocusedInput("path")}
-                onBlur={() => setFocusedInput(null)}
-                onChange={(e) => {
-                  setPathSearch(e.target.value);
-                  // Clear text search when typing in path search
-                  if (e.target.value && textSearch) {
-                    setTextSearch("");
-                  }
-                }}
-                className="pl-10"
-              />
-            </div>
-            <Button type="submit" size="sm" disabled={isSearching || !jsonData}>
-              Search
-            </Button>
-          </form>
-        </div>
+              }}
+              className="pl-10"
+            />
+          </div>
+
+          {/* Single Search Button */}
+          <Button 
+            type="submit" 
+            size="sm" 
+            disabled={isSearching || (pathSearch.trim() && !jsonData)}
+          >
+            Search
+          </Button>
+        </form>
       </div>
 
       {/* Results List */}
