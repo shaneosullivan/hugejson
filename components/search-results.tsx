@@ -4,7 +4,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, Hash, Copy, Check, Code, HelpCircle } from "lucide-react";
+import { Search, Hash, Copy, Check, Code, HelpCircle, Wrench } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -17,6 +17,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { HelpContent } from "./help-content";
+import { JqQueryBuilder } from "./jq-query-builder";
 
 interface SearchResult {
   lineNumber: number;
@@ -49,6 +50,7 @@ export function SearchResults({
   const [copiedPath, setCopiedPath] = useState<string | null>(null);
   const [showHelp, setShowHelp] = useState(false);
   const [helpTab, setHelpTab] = useState<"text" | "path" | "jq">("text");
+  const [showQueryBuilder, setShowQueryBuilder] = useState(false);
   const { toast } = useToast();
 
   // Virtualization state
@@ -533,6 +535,13 @@ export function SearchResults({
     [onResultClick]
   );
 
+  const handleQueryBuilderSubmit = useCallback((query: string) => {
+    setSearchValue(query);
+    setShowQueryBuilder(false);
+    // Automatically run the search with the new query
+    performJqSearch(query);
+  }, [performJqSearch]);
+
   // Function to highlight search terms in text
   const highlightText = useCallback((text: string, searchTerm: string) => {
     if (!searchTerm || !text) return text;
@@ -590,6 +599,18 @@ export function SearchResults({
                 className="pl-10"
               />
             </div>
+            {searchType === "jq" && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setShowQueryBuilder(true)}
+                disabled={!jsonData}
+                title="Open jq Query Builder"
+              >
+                <Wrench className="w-4 h-4" />
+              </Button>
+            )}
             <Button
               type="submit"
               size="sm"
@@ -796,6 +817,14 @@ export function SearchResults({
           </div>
         )}
       </div>
+
+      {/* jq Query Builder Modal */}
+      <JqQueryBuilder
+        isOpen={showQueryBuilder}
+        onClose={() => setShowQueryBuilder(false)}
+        onSubmit={handleQueryBuilderSubmit}
+        initialQuery={searchType === "jq" ? searchValue : ""}
+      />
     </div>
   );
 }
