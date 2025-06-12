@@ -4,7 +4,16 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, Hash, Copy, Check, Code, HelpCircle, Wrench } from "lucide-react";
+import {
+  Search,
+  Hash,
+  Copy,
+  Check,
+  Code,
+  HelpCircle,
+  Wrench,
+  Save,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -51,6 +60,7 @@ export function SearchResults({
   const [showHelp, setShowHelp] = useState(false);
   const [helpTab, setHelpTab] = useState<"text" | "path" | "jq">("text");
   const [showQueryBuilder, setShowQueryBuilder] = useState(false);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
   const { toast } = useToast();
 
   // Virtualization state
@@ -398,14 +408,14 @@ export function SearchResults({
   // Load jq-web module
   useEffect(() => {
     const loadJq = async () => {
-      if (jqInstanceRef.current || typeof window === 'undefined') return;
+      if (jqInstanceRef.current || typeof window === "undefined") return;
 
       try {
         // Load jq-web module and let it use default path resolution
         // Next.js rewrites will redirect /_next/static/chunks/jq.wasm to /jq.wasm
         const jqModule = await import("jq-web");
         const jq = jqModule.default || jqModule;
-        
+
         // jq-web exports the instance directly, not a factory function
         jqInstanceRef.current = jq;
         console.log("✅ jq-web loaded successfully", jq);
@@ -429,7 +439,7 @@ export function SearchResults({
         // Wait for jq to be loaded if it's not ready yet
         let attempts = 0;
         while (!jqInstanceRef.current && attempts < 20) {
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise((resolve) => setTimeout(resolve, 100));
           attempts++;
         }
 
@@ -535,12 +545,55 @@ export function SearchResults({
     [onResultClick]
   );
 
-  const handleQueryBuilderSubmit = useCallback((query: string) => {
-    setSearchValue(query);
-    setShowQueryBuilder(false);
-    // Automatically run the search with the new query
-    performJqSearch(query);
-  }, [performJqSearch]);
+  const handleQueryBuilderSubmit = useCallback(
+    (query: string) => {
+      // Update the search input first
+      setSearchValue(query);
+      setSearchType("jq");
+      
+      // Show that query is running
+      setIsSearching(true);
+      setResults([]);
+      setJqResult("");
+      
+      // Use setTimeout to allow UI to update before running the query
+      setTimeout(() => {
+        performJqSearch(query);
+      }, 100);
+    },
+    [performJqSearch]
+  );
+
+  const handleSaveQuery = useCallback(() => {
+    if (!searchValue.trim()) {
+      toast({
+        description: "No query to save",
+        variant: "destructive",
+        duration: 2000,
+      });
+      return;
+    }
+    setShowSaveDialog(true);
+  }, [searchValue, toast]);
+
+  const saveQueryToStorage = useCallback((name: string, description?: string) => {
+    const savedQueries = JSON.parse(localStorage.getItem("jq-saved-queries") || "[]");
+    const newQuery = {
+      id: Date.now().toString(),
+      name,
+      description,
+      query: searchValue,
+      createdAt: new Date().toISOString(),
+    };
+    savedQueries.unshift(newQuery);
+    localStorage.setItem("jq-saved-queries", JSON.stringify(savedQueries));
+    
+    toast({
+      description: `Query "${name}" saved successfully`,
+      duration: 2000,
+    });
+    setShowSaveDialog(false);
+  }, [searchValue, toast]);
 
   // Function to highlight search terms in text
   const highlightText = useCallback((text: string, searchTerm: string) => {
@@ -566,7 +619,6 @@ export function SearchResults({
       return part;
     });
   }, []);
-
 
   return (
     <div className="flex flex-col h-full">
@@ -611,6 +663,17 @@ export function SearchResults({
                 <Wrench className="w-4 h-4" />
               </Button>
             )}
+            {searchValue.trim() && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={handleSaveQuery}
+                title="Save this query"
+              >
+                <Save className="w-4 h-4" />
+              </Button>
+            )}
             <Button
               type="submit"
               size="sm"
@@ -651,7 +714,7 @@ export function SearchResults({
                 </Label>
               </div>
             </RadioGroup>
-            
+
             <Dialog open={showHelp} onOpenChange={setShowHelp}>
               <DialogTrigger asChild>
                 <Button
@@ -667,7 +730,8 @@ export function SearchResults({
                 <DialogHeader>
                   <DialogTitle>Search Help</DialogTitle>
                   <DialogDescription>
-                    Learn how to use different search types to query your JSON data effectively.
+                    Learn how to use different search types to query your JSON
+                    data effectively.
                   </DialogDescription>
                 </DialogHeader>
                 <HelpContent helpTab={helpTab} setHelpTab={setHelpTab} />
@@ -684,7 +748,9 @@ export function SearchResults({
         onScroll={handleScroll}
       >
         {isSearching ? (
-          <div className="p-4 text-center text-gray-500">Searching...</div>
+          <div className="p-4 text-center text-gray-500">
+            {searchType === "jq" ? "Running jq query..." : "Searching..."}
+          </div>
         ) : jqResult ? (
           <div className="p-4">
             <div className="text-sm text-gray-600 dark:text-gray-400 mb-3">
@@ -825,6 +891,67 @@ export function SearchResults({
         onSubmit={handleQueryBuilderSubmit}
         initialQuery={searchType === "jq" ? searchValue : ""}
       />
+
+      {/* Save Query Dialog */}
+      {showSaveDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
+            <h3 className="text-lg font-medium mb-4 text-gray-900">Save Query</h3>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target as HTMLFormElement);
+                const name = formData.get("name") as string;
+                const description = formData.get("description") as string;
+                if (name) {
+                  saveQueryToStorage(name, description || undefined);
+                }
+              }}
+            >
+              <div className="mb-4">
+                <Label htmlFor="save-query-name" className="text-gray-900">
+                  Query Name
+                </Label>
+                <Input
+                  id="save-query-name"
+                  name="name"
+                  placeholder="My useful query"
+                  required
+                  autoFocus
+                />
+              </div>
+              <div className="mb-4">
+                <Label htmlFor="save-query-description" className="text-gray-900">
+                  Description (optional)
+                </Label>
+                <Input
+                  id="save-query-description"
+                  name="description"
+                  placeholder="What does this query do?"
+                />
+              </div>
+              <div className="mb-4">
+                <Label className="text-gray-700">Query</Label>
+                <div className="font-mono text-sm bg-gray-100 p-2 rounded border text-gray-900">
+                  {searchValue}
+                </div>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowSaveDialog(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit">
+                  Save
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
