@@ -67,10 +67,8 @@ jobs:
       - name: Build with Next.js
         run: ${{ steps.detect-package-manager.outputs.runner }} next build
       
-      - name: Copy WASM files
-        run: |
-          mkdir -p ./out/_next/static/chunks
-          cp ./public/jq.wasm ./out/_next/static/chunks/jq.wasm
+      - name: Run post-build script
+        run: ./scripts/postBuild.sh
       
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

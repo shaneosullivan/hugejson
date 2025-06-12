@@ -86,10 +86,9 @@ export function SearchResults({
     }
 
     lastContentRef.current = content;
+    const contentLines = content.split("\n");
 
     const computeAllLinePaths = () => {
-      const startTime = performance.now();
-      console.log(`🔄 Computing paths for all ${contentLines.length} lines`);
 
       const linePaths: string[] = new Array(contentLines.length);
       const pathStack: string[] = []; // Stack of parent keys
@@ -158,16 +157,11 @@ export function SearchResults({
         }
       }
 
-      const endTime = performance.now();
-      console.log(
-        `✅ Computed all line paths in ${(endTime - startTime).toFixed(2)}ms`
-      );
-
       return linePaths;
     };
 
     linePathsRef.current = computeAllLinePaths();
-  }, [content, contentLines]);
+  }, [content]);
 
   // Calculate visible range for virtualization
   const visibleStartIndex = Math.max(
@@ -411,14 +405,12 @@ export function SearchResults({
       if (jqInstanceRef.current || typeof window === "undefined") return;
 
       try {
-        // Load jq-web module and let it use default path resolution
-        // Next.js rewrites will redirect /_next/static/chunks/jq.wasm to /jq.wasm
+        // Load jq-web module
         const jqModule = await import("jq-web");
         const jq = jqModule.default || jqModule;
 
         // jq-web exports the instance directly, not a factory function
         jqInstanceRef.current = jq;
-        console.log("✅ jq-web loaded successfully", jq);
       } catch (error) {
         console.error("❌ Failed to load jq-web:", error);
       }
@@ -501,7 +493,6 @@ export function SearchResults({
       // lineIndex is 1-based, convert to 0-based for array access
       const path = linePathsRef.current[lineIndex - 1] || "root";
       setHoveredPath(path);
-      console.log(`📍 Hover path for line ${lineIndex}: "${path}"`);
     },
     []
   );

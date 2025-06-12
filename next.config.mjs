@@ -36,38 +36,6 @@ const nextConfig = {
     
     return config;
   },
-  // Rewrite requests for jq.wasm from chunks folder to root
-  async rewrites() {
-    return [
-      {
-        source: '/_next/static/chunks/jq.wasm',
-        destination: '/jq.wasm',
-      },
-    ];
-  },
-  // Ensure WASM files are served with correct MIME type
-  async headers() {
-    return [
-      {
-        source: '/jq.wasm',
-        headers: [
-          {
-            key: 'Content-Type',
-            value: 'application/wasm',
-          },
-        ],
-      },
-      {
-        source: '/_next/static/chunks/jq.wasm',
-        headers: [
-          {
-            key: 'Content-Type',
-            value: 'application/wasm',
-          },
-        ],
-      },
-    ];
-  },
 }
 
 export default nextConfig

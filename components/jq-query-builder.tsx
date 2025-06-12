@@ -845,24 +845,17 @@ export function JqQueryBuilder({
     }
   }, []);
 
-  // Load saved queries from localStorage on component mount
+  // Load saved queries from localStorage on component mount and when needed
   useEffect(() => {
     reloadSavedQueries();
   }, [reloadSavedQueries]);
 
-  // Reload saved queries when modal opens (in case they were updated externally)
+  // Reload saved queries when modal opens or switching to saved tab
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && activeTab === "saved") {
       reloadSavedQueries();
     }
-  }, [isOpen, reloadSavedQueries]);
-
-  // Reload saved queries when switching to saved tab
-  useEffect(() => {
-    if (activeTab === "saved") {
-      reloadSavedQueries();
-    }
-  }, [activeTab, reloadSavedQueries]);
+  }, [isOpen, activeTab, reloadSavedQueries]);
 
   // Save queries to localStorage whenever savedQueries changes
   useEffect(() => {

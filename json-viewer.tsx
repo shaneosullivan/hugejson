@@ -19,7 +19,7 @@ import {
   FileText,
   Zap,
   AlertTriangle,
-  Github,
+  GitBranch,
 } from "lucide-react";
 import { SearchResults } from "./components/search-results";
 import { Logo } from "./components/logo";
@@ -33,13 +33,11 @@ self.onmessage = (e) => {
   try {
     switch (type) {
       case "READ_AND_PARSE_FILE":
-        console.log('🔧 Worker: Starting file read and parse')
         const fileStartTime = performance.now()
         
         const reader = new FileReader()
         reader.onload = (event) => {
           const readEndTime = performance.now()
-          console.log(\`📖 Worker: File read completed in \${(readEndTime - fileStartTime).toFixed(2)}ms\`)
           
           const content = event.target.result
           
@@ -51,12 +49,10 @@ self.onmessage = (e) => {
           
           // Now parse the JSON
           const parseStartTime = performance.now()
-          console.log('🔄 Worker: Starting JSON parse')
           
           try {
             const parsed = JSON.parse(content)
             const parseEndTime = performance.now()
-            console.log(\`✅ Worker: JSON parse completed in \${(parseEndTime - parseStartTime).toFixed(2)}ms\`)
             
             self.postMessage({
               type: "PARSE_SUCCESS",
@@ -66,7 +62,6 @@ self.onmessage = (e) => {
             })
           } catch (parseError) {
             const parseEndTime = performance.now()
-            console.log(\`❌ Worker: JSON parse failed in \${(parseEndTime - parseStartTime).toFixed(2)}ms\`)
             
             self.postMessage({
               type: "PARSE_ERROR",
@@ -78,7 +73,6 @@ self.onmessage = (e) => {
         
         reader.onerror = () => {
           const errorTime = performance.now()
-          console.log(\`❌ Worker: File read failed in \${(errorTime - fileStartTime).toFixed(2)}ms\`)
           
           self.postMessage({
             type: "FILE_READ_ERROR",
@@ -91,13 +85,10 @@ self.onmessage = (e) => {
         break
 
       case "PARSE_JSON":
-        console.log('🔄 Worker: Starting JSON parse (text input)')
         const parseStartTime = performance.now()
         
         const parsed = JSON.parse(data)
         const parseEndTime = performance.now()
-        
-        console.log(\`✅ Worker: JSON parse completed in \${(parseEndTime - parseStartTime).toFixed(2)}ms\`)
         
         self.postMessage({
           type: "PARSE_SUCCESS",
@@ -107,13 +98,10 @@ self.onmessage = (e) => {
         break
 
       case "VALIDATE_JSON":
-        console.log('🔍 Worker: Starting JSON validation')
         const validateStartTime = performance.now()
         
         JSON.parse(data)
         const validateEndTime = performance.now()
-        
-        console.log(\`✅ Worker: JSON validation completed in \${(validateEndTime - validateStartTime).toFixed(2)}ms\`)
         
         self.postMessage({
           type: "VALIDATION_SUCCESS",
@@ -127,7 +115,6 @@ self.onmessage = (e) => {
     }
   } catch (error) {
     const errorTime = performance.now()
-    console.log(\`❌ Worker: Error in \${(errorTime - startTime).toFixed(2)}ms: \${error.message}\`)
     
     self.postMessage({
       type: "PARSE_ERROR",
@@ -213,103 +200,26 @@ export default function JsonViewer() {
           errorTime,
         } = e.data;
         
-        const messageProcessTime = performance.now() - messageReceiveTime;
-        console.log(`📨 Main: Message received and processed in ${messageProcessTime.toFixed(2)}ms (type: ${type})`);
-
         if (type === "FILE_READ_SUCCESS") {
-          const timeSinceStart = messageReceiveTime - performanceTimerRef.current;
-          console.log(`📄 Main: File content received after ${timeSinceStart.toFixed(2)}ms from start`);
-          
-          const uiUpdateStart = performance.now();
-          console.log(`📏 Main: Content size: ${(content.length / 1024 / 1024).toFixed(2)}MB`);
-
           setLeftContent(content);
-
-          const uiUpdateEnd = performance.now();
-          console.log(
-            `🎨 Main: UI update (setLeftContent) completed in ${(
-              uiUpdateEnd - uiUpdateStart
-            ).toFixed(2)}ms`
-          );
         } else if (type === "PARSE_SUCCESS") {
-          const timeSinceStart = messageReceiveTime - performanceTimerRef.current;
-          console.log(`🎯 Main: Parse success received after ${timeSinceStart.toFixed(2)}ms from start`);
-          
-          const reactUpdatesStart = performance.now();
-
           setRightContent(data);
           setError(null);
           setIsLoading(false);
-          
-          const reactUpdatesEnd = performance.now();
-          console.log(`⚛️ Main: React state updates completed in ${(reactUpdatesEnd - reactUpdatesStart).toFixed(2)}ms`);
 
           // Calculate stats
-          const statsStartTime = performance.now();
           const jsonString = JSON.stringify(data);
-          const stringifyEnd = performance.now();
-          console.log(`🔄 Main: JSON.stringify completed in ${(stringifyEnd - statsStartTime).toFixed(2)}ms`);
-          
-          const nodeCountStart = performance.now();
           const nodeCount = countNodes(data);
-          const nodeCountEnd = performance.now();
-          console.log(`🌳 Main: Node counting completed in ${(nodeCountEnd - nodeCountStart).toFixed(2)}ms`);
           
           setJsonStats({
             size: jsonString.length,
             nodes: nodeCount,
           });
-
-          const statsEndTime = performance.now();
-          const totalProcessTime = performance.now() - performanceTimerRef.current;
-          const delayTime = totalProcessTime - (totalTime || 0);
-
-          console.log(
-            `📊 Main: Stats calculation completed in ${(
-              statsEndTime - statsStartTime
-            ).toFixed(2)}ms`
-          );
-          console.log(
-            `⏱️ TOTAL WORKFLOW TIME: ${totalProcessTime.toFixed(2)}ms`
-          );
-          console.log(
-            `🐌 UNACCOUNTED DELAY TIME: ${delayTime.toFixed(2)}ms`
-          );
-
-          if (parseTime)
-            console.log(`   - Parse time: ${parseTime.toFixed(2)}ms`);
-          if (readTime)
-            console.log(`   - File read time: ${readTime.toFixed(2)}ms`);
-          if (totalTime)
-            console.log(`   - Worker total time: ${totalTime.toFixed(2)}ms`);
-          console.log(
-            `   - JSON.stringify: ${(stringifyEnd - statsStartTime).toFixed(2)}ms`
-          );
-          console.log(
-            `   - Node counting: ${(nodeCountEnd - nodeCountStart).toFixed(2)}ms`
-          );
-          console.log(
-            `   - React updates: ${(reactUpdatesEnd - reactUpdatesStart).toFixed(2)}ms`
-          );
-          console.log(
-            `   - Stats calculation: ${(statsEndTime - statsStartTime).toFixed(
-              2
-            )}ms`
-          );
         } else if (type === "PARSE_ERROR" || type === "FILE_READ_ERROR") {
-          console.log(`❌ Main: Error received: ${error}`);
           setError(error);
           setRightContent(null);
           setJsonStats(null);
           setIsLoading(false);
-
-          const totalErrorTime =
-            performance.now() - performanceTimerRef.current;
-          console.log(`⏱️ ERROR WORKFLOW TIME: ${totalErrorTime.toFixed(2)}ms`);
-          if (errorTime)
-            console.log(`   - Error time: ${errorTime.toFixed(2)}ms`);
-          if (validateTime)
-            console.log(`   - Validate time: ${validateTime.toFixed(2)}ms`);
         }
       };
 
@@ -416,13 +326,6 @@ export default function JsonViewer() {
     (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
       if (file) {
-        console.log(
-          `📁 Main: File selected (${file.name}, ${(
-            file.size /
-            1024 /
-            1024
-          ).toFixed(2)}MB)`
-        );
         performanceTimerRef.current = performance.now();
 
         if (file.size > 50 * 1024 * 1024) {
@@ -431,52 +334,25 @@ export default function JsonViewer() {
           return;
         }
 
-        console.log("🔄 Main: Setting loading state");
-        const loadingStartTime = performance.now();
-
         // Show loading state immediately and force UI update
         setIsLoading(true);
         setError(null);
 
-        const loadingEndTime = performance.now();
-        console.log(
-          `🎨 Main: Loading state set in ${(
-            loadingEndTime - loadingStartTime
-          ).toFixed(2)}ms`
-        );
-
         // Use requestAnimationFrame to ensure loading UI is rendered before processing
         requestAnimationFrame(() => {
-          console.log("🎬 Main: requestAnimationFrame callback - loading UI should be visible");
-          
           // Add another frame to be extra sure the loading UI is painted
           requestAnimationFrame(() => {
-            const animationFrameTime = performance.now();
-            const uiRenderDelay = animationFrameTime - loadingEndTime;
-            console.log(`🖼️ Main: UI render delay: ${uiRenderDelay.toFixed(2)}ms`);
-            
-            console.log("🚀 Main: Starting worker file processing (after UI render)");
-            const workerStartTime = performance.now();
-
             try {
               parserWorkerRef.current?.postMessage({
                 type: "READ_AND_PARSE_FILE",
                 file: file,
               });
-
-              const workerDispatchTime = performance.now();
-              console.log(
-                `📤 Main: Worker message dispatched in ${(
-                  workerDispatchTime - workerStartTime
-                ).toFixed(2)}ms`
-              );
             } catch (error) {
-              console.log("❌ Main: Failed to dispatch to worker");
               setIsLoading(false);
               setError("Failed to process file");
             }
           });
-        }); // Small delay to ensure UI update
+        });
       }
     },
     []
@@ -595,65 +471,27 @@ export default function JsonViewer() {
           return;
         }
 
-        console.log(
-          `🎯 Main: File dropped (${file.name}, ${(
-            file.size /
-            1024 /
-            1024
-          ).toFixed(2)}MB)`
-        );
         performanceTimerRef.current = performance.now();
-
-        console.log("🔄 Main: Setting loading state for dropped file");
-        const loadingStartTime = performance.now();
 
         // Show loading state immediately and force UI update
         setIsLoading(true);
         setError(null);
 
-        const loadingEndTime = performance.now();
-        console.log(
-          `🎨 Main: Loading state set in ${(
-            loadingEndTime - loadingStartTime
-          ).toFixed(2)}ms`
-        );
-
         // Use requestAnimationFrame to ensure loading UI is rendered before processing
         requestAnimationFrame(() => {
-          console.log("🎬 Main: requestAnimationFrame callback - loading UI should be visible (dropped file)");
-          
           // Add another frame to be extra sure the loading UI is painted
           requestAnimationFrame(() => {
-            const animationFrameTime = performance.now();
-            const uiRenderDelay = animationFrameTime - loadingEndTime;
-            console.log(`🖼️ Main: UI render delay: ${uiRenderDelay.toFixed(2)}ms (dropped file)`);
-            
-            console.log(
-              "🚀 Main: Starting worker file processing for dropped file (after UI render)"
-            );
-            const workerStartTime = performance.now();
-
             try {
               parserWorkerRef.current?.postMessage({
                 type: "READ_AND_PARSE_FILE",
                 file: file,
               });
-
-              const workerDispatchTime = performance.now();
-              console.log(
-                `📤 Main: Worker message dispatched in ${(
-                  workerDispatchTime - workerStartTime
-                ).toFixed(2)}ms`
-              );
             } catch (error) {
-              console.log(
-                "❌ Main: Failed to dispatch to worker for dropped file"
-              );
               setIsLoading(false);
               setError("Failed to process dropped file");
             }
           });
-        }); // Small delay to ensure UI update
+        });
       }
     },
     [handleLeftContentChange]
@@ -722,7 +560,7 @@ export default function JsonViewer() {
                   rel="noopener noreferrer"
                   aria-label="View source on GitHub"
                 >
-                  <Github className="h-5 w-5" />
+                  <GitBranch className="h-5 w-5" />
                 </a>
               </Button>
             </div>

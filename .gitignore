@@ -27,3 +27,4 @@ yarn-error.log*
 next-env.d.ts
 data
 .DS_Store
+public/_next

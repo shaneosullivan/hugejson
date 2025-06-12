@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "PORT=3050 next dev",
-    "build": "next build && ./scripts/postBuild.sh",
-    "export": "next build && ./scripts/postBuild.sh",
+    "dev": "PORT=3050 scripts/preDev.sh && next dev",
+    "build": "scripts/preExport.sh && next build && ./scripts/postBuild.sh",
+    "export": "scripts/preExport.sh && next build && ./scripts/postBuild.sh",
     "start": "next start",
     "lint": "next lint"
   },
