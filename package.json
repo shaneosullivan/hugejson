@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "PORT=3050 next dev",
-    "build": "next build",
-    "export": "next build",
+    "build": "next build && ./scripts/postBuild.sh",
+    "export": "next build && ./scripts/postBuild.sh",
     "start": "next start",
     "lint": "next lint"
   },
