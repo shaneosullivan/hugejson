@@ -1,3 +1,8 @@
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "export",
@@ -22,18 +27,13 @@ const nextConfig = {
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
-        fs: false,
+        fs: join(__dirname, 'lib', 'empty-fs.mjs'),
         path: false,
         crypto: false,
         stream: false,
         util: false,
         buffer: false,
         process: false,
-      };
-
-      // Fix for jq-web module trying to import 'fs' on Vercel
-      config.node = {
-        fs: "empty",
       };
     }
 
