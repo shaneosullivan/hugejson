@@ -1,5 +1,5 @@
-import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -25,9 +25,14 @@ const nextConfig = {
   webpack: (config, { isServer, dev }) => {
     // Configure webpack to handle jq-web by providing empty modules for Node.js dependencies
     if (!isServer) {
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        fs: join(__dirname, "lib", "empty-fs.js"),
+      };
+
       config.resolve.fallback = {
         ...config.resolve.fallback,
-        fs: join(__dirname, 'lib', 'empty-fs.mjs'),
+        fs: join(__dirname, "lib", "empty-fs.js"),
         path: false,
         crypto: false,
         stream: false,
