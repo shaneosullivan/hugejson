@@ -2,8 +2,6 @@ const fs = require("fs");
 const path = require("path");
 const jqWebPath = path.join(__dirname, "..", "node_modules", "jq-web", "jq.js");
 
-console.log("jqWebPath", jqWebPath);
-
 const contents = fs.readFileSync(jqWebPath, "utf8");
 
 const lines = contents.split("\n");
