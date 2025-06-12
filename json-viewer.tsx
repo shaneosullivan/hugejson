@@ -174,6 +174,15 @@ export default function JsonViewer() {
   const formatterWorkerRef = useRef<Worker | null>(null);
   const performanceTimerRef = useRef<number>(0);
 
+  // Clear textarea on mount to prevent browser form restoration
+  useEffect(() => {
+    // Clear both the React state and the DOM element
+    setLeftContent("");
+    if (textareaRef.current) {
+      textareaRef.current.value = "";
+    }
+  }, []);
+
   // Initialize workers
   useEffect(() => {
     try {
@@ -527,7 +536,7 @@ export default function JsonViewer() {
                   Huge JSON Viewer
                 </h1>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  View and search large JSON
+                  View and search large JSON files
                 </p>
               </div>
             </div>

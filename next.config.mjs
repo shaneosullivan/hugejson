@@ -9,8 +9,6 @@ const nextConfig = {
   trailingSlash: true,
   skipTrailingSlashRedirect: true,
   distDir: process.env.NODE_ENV === "production" ? "dist" : ".next-build",
-  // basePath: "/hugejson",
-  // assetPrefix: "/hugejson",
   eslint: {
     ignoreDuringBuilds: true,
   },
