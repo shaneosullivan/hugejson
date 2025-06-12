@@ -30,6 +30,12 @@ const nextConfig = {
         buffer: false,
         process: false,
       };
+
+      // Fix for jq-web module trying to import 'fs' on Vercel
+      config.node = {
+        ...config.node,
+        fs: "empty",
+      };
     }
 
     // Ensure WASM files are handled correctly
