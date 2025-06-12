@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "scripts/preDev.sh && PORT=3050 next dev",
+    "dev": "PORT=3050 next dev & scripts/preDev.sh",
     "build": "scripts/preExport.sh && next build && ./scripts/postBuild.sh",
     "export": "scripts/preExport.sh && next build && ./scripts/postBuild.sh",
     "start": "next start",
