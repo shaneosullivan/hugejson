@@ -654,7 +654,7 @@ export function SearchResults({
                 <Wrench className="w-4 h-4" />
               </Button>
             )}
-            {searchValue.trim() && (
+            {searchValue.trim() && searchType === "jq" && (
               <Button
                 type="button"
                 size="sm"
