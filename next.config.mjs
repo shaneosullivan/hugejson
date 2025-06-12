@@ -33,7 +33,6 @@ const nextConfig = {
 
       // Fix for jq-web module trying to import 'fs' on Vercel
       config.node = {
-        ...config.node,
         fs: "empty",
       };
     }
