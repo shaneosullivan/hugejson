@@ -19,6 +19,7 @@ import {
   FileText,
   Zap,
   AlertTriangle,
+  Github,
 } from "lucide-react";
 import { SearchResults } from "./components/search-results";
 import { Logo } from "./components/logo";
@@ -708,6 +709,21 @@ export default function JsonViewer() {
               >
                 <Upload className="w-4 h-4 mr-2" />
                 Load File
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                asChild
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              >
+                <a
+                  href="https://github.com/shaneosullivan/hugejson"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="View source on GitHub"
+                >
+                  <Github className="h-5 w-5" />
+                </a>
               </Button>
             </div>
           </div>
