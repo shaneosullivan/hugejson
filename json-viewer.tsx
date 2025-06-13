@@ -33,15 +33,15 @@ import {
 // Worker code as strings with file reading and performance tracking
 const jsonParserWorkerCode = `
 // Iterative stringify function to avoid stack overflow
-${stringify.toString()}
+const iterativeStringify = ${stringify.toString()}
 
-${consolidateBrackets.toString()}
+const consolidateBrackets = ${consolidateBrackets.toString()}
 
-${formatPrimitive.toString()}
+const formatPrimitive = ${formatPrimitive.toString()}
 
-${escapeString.toString()}
+const escapeString = ${escapeString.toString()}
 
-${safeStringify.toString()}
+const safeStringify = ${safeStringify.toString()}
 
 self.onmessage = (e) => {
   const { type, data, file } = e.data
