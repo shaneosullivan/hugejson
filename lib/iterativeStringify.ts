@@ -1,5 +1,22 @@
-// Iterative stringify function to avoid stack overflow
-function iterativeStringify(value, indent = null) {
+type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+interface StackItem {
+  value: any;
+  context: "root" | "array" | "object" | "separator" | "indent" | "key";
+  processed?: boolean;
+  depth?: number;
+}
+
+function iterativeStringify(
+  value: JsonValue,
+  indent: number | string | null = null
+): string {
   // Handle primitive values directly
   if (value === null) return "null";
   if (typeof value === "string") return `"${escapeString(value)}"`;
@@ -8,10 +25,10 @@ function iterativeStringify(value, indent = null) {
   if (typeof value === "boolean") return String(value);
   if (value === undefined) return "null";
 
-  const stack = [];
-  const results = [];
+  const stack: StackItem[] = [];
+  const results: string[] = [];
   // Use WeakSet for non-array objects, __visited__ hack for arrays to save memory
-  const visitedArrays = []; // Track arrays to clean up __visited__ properties
+  const visitedArrays: any[] = []; // Track arrays to clean up __visited__ properties
   const indentStr =
     indent === null
       ? ""
@@ -24,7 +41,7 @@ function iterativeStringify(value, indent = null) {
   stack.push({ value, context: "root", depth: 0 });
 
   while (stack.length > 0) {
-    const item = stack.pop();
+    const item = stack.pop()!;
 
     if (
       Array.isArray(item.value) ||
@@ -32,7 +49,7 @@ function iterativeStringify(value, indent = null) {
     ) {
       if (!item.processed) {
         // Check for circular references using __visited__ property hack for arrays
-        if (item.value.__visited__) {
+        if ((item.value as any).__visited__) {
           throw new Error("Converting circular structure to JSON");
         }
 
@@ -41,7 +58,7 @@ function iterativeStringify(value, indent = null) {
         stack.push(item);
 
         // Mark array as visited using property hack and track for cleanup
-        item.value.__visited__ = true;
+        (item.value as any).__visited__ = true;
         visitedArrays.push(item.value);
 
         if (Array.isArray(item.value)) {
@@ -152,7 +169,7 @@ function iterativeStringify(value, indent = null) {
 
   // Clean up __visited__ properties from arrays
   for (const arr of visitedArrays) {
-    delete arr.__visited__;
+    delete (arr as any).__visited__;
   }
 
   const result = results.join("");
@@ -165,9 +182,9 @@ function iterativeStringify(value, indent = null) {
   return result;
 }
 
-function consolidateBrackets(str) {
+function consolidateBrackets(str: string): string {
   const lines = str.split("\n");
-  const result = [];
+  const result: string[] = [];
   let i = 0;
 
   while (i < lines.length) {
@@ -227,7 +244,7 @@ function consolidateBrackets(str) {
   return result.join("\n");
 }
 
-function formatPrimitive(value) {
+function formatPrimitive(value: any): string {
   if (value === null) return "null";
   if (value === undefined) return "null";
   if (typeof value === "string") return `"${escapeString(value)}"`;
@@ -237,48 +254,35 @@ function formatPrimitive(value) {
   return "null";
 }
 
-function escapeString(str) {
+function escapeString(str: string): string {
   return str
     .replace(/\\/g, "\\\\")
     .replace(/"/g, '\\"')
     .replace(/\n/g, "\\n")
     .replace(/\r/g, "\\r")
     .replace(/\t/g, "\\t")
-    .replace(/\u0008/g, "\\b") // Backspace character
+    .replace(/\u0008/g, "\\b") // Backspace character (not word boundary)
     .replace(/\f/g, "\\f");
 }
 
-function safeStringify(data, indent) {
+// Example usage and tests
+
+function safeStringify(data: JsonValue, indent?: number | string): string {
   try {
     // Try native JSON.stringify first (faster)
     return JSON.stringify(data, null, indent);
   } catch (error) {
     // Fall back to iterative stringify for deep structures
-    return iterativeStringify(data, 0);
+    const result = iterativeStringify(data, 0);
+
+    return result;
   }
 }
 
-self.onmessage = (e) => {
-  const { type, data, indent } = e.data;
-
-  try {
-    switch (type) {
-      case "FORMAT_JSON":
-        const parsed = JSON.parse(data);
-        const stringifyResult = safeStringify(parsed, indent);
-        self.postMessage({
-          type: "FORMAT_SUCCESS",
-          dataString: stringifyResult,
-        });
-        break;
-
-      default:
-        throw new Error(`Unknown message type: ${type}`);
-    }
-  } catch (error) {
-    self.postMessage({
-      type: "FORMAT_ERROR",
-      error: error.message,
-    });
-  }
+export {
+  iterativeStringify as stringify,
+  safeStringify,
+  formatPrimitive,
+  escapeString,
+  consolidateBrackets,
 };

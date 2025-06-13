@@ -22,12 +22,31 @@ import {
 } from "lucide-react";
 import { SearchResults } from "./components/search-results";
 import { Logo } from "./components/logo";
+import {
+  escapeString,
+  formatPrimitive,
+  safeStringify,
+  stringify,
+  consolidateBrackets,
+} from "./lib/iterativeStringify";
 
 // Worker code as strings with file reading and performance tracking
 const jsonParserWorkerCode = `
+// Iterative stringify function to avoid stack overflow
+${stringify.toString()}
+
+${consolidateBrackets.toString()}
+
+${formatPrimitive.toString()}
+
+${escapeString.toString()}
+
+${safeStringify.toString()}
+
 self.onmessage = (e) => {
   const { type, data, file } = e.data
-  const startTime = performance.now()
+  const startTime = performance.now();
+
 
   try {
     switch (type) {
@@ -38,7 +57,13 @@ self.onmessage = (e) => {
         reader.onload = (event) => {
           const readEndTime = performance.now()
           
-          const content = event.target.result
+          let content = event.target.result;
+          
+          try {
+            content = safeStringify(JSON.parse(event.target.result), 2);
+          } catch (error) {
+            console.error("Failed to parse JSON when reading the file:", error);
+          }
           
           self.postMessage({
             type: "FILE_READ_SUCCESS",
@@ -53,9 +78,12 @@ self.onmessage = (e) => {
             const parsed = JSON.parse(content)
             const parseEndTime = performance.now()
             
+            // Use safe stringify for deep structures
+            const stringifyResult = safeStringify(parsed, 2)
+            
             self.postMessage({
               type: "PARSE_SUCCESS",
-              data: parsed,
+              dataString: stringifyResult,
               parseTime: parseEndTime - parseStartTime,
               totalTime: parseEndTime - fileStartTime
             })
@@ -89,9 +117,12 @@ self.onmessage = (e) => {
         const parsed = JSON.parse(data)
         const parseEndTime = performance.now()
         
+        // Use safe stringify for deep structures
+        const stringifyResult = safeStringify(parsed, 2)
+        
         self.postMessage({
           type: "PARSE_SUCCESS",
-          data: parsed,
+          dataString: stringifyResult,
           parseTime: parseEndTime - parseStartTime
         })
         break
@@ -125,6 +156,16 @@ self.onmessage = (e) => {
 `;
 
 const jsonFormatterWorkerCode = `
+${stringify.toString()}
+
+${consolidateBrackets.toString()}
+
+${formatPrimitive.toString()}
+
+${escapeString.toString()}
+
+${safeStringify.toString()}
+
 self.onmessage = (e) => {
   const { type, data, indent } = e.data
 
@@ -132,17 +173,29 @@ self.onmessage = (e) => {
     switch (type) {
       case "FORMAT_JSON":
         const parsed = JSON.parse(data)
-        const formatted = JSON.stringify(parsed, null, indent)
-        self.postMessage({
-          type: "FORMAT_SUCCESS",
-          data: formatted,
-        })
+        
+        try {
+          // Try native JSON.stringify first (faster)
+          const formatted = safeStringify(parsed, 2)
+          self.postMessage({
+            type: "FORMAT_SUCCESS",
+            dataString: formatted,
+          })
+        } catch (stringifyError) {
+          // Fall back to iterative stringify for deep structures
+          const formatted = iterativeStringify(parsed, indent)
+          self.postMessage({
+            type: "FORMAT_SUCCESS",
+            dataString: formatted,
+          })
+        }
         break
 
       default:
         throw new Error(\`Unknown message type: \${type}\`)
     }
   } catch (error) {
+    console.error("Formatter worker error:", error)
     self.postMessage({
       type: "FORMAT_ERROR",
       error: error.message,
@@ -195,34 +248,21 @@ export default function JsonViewer() {
       const formatterWorker = formatterWorkerRef.current;
 
       parserWorker.onmessage = (e) => {
-        const messageReceiveTime = performance.now();
-        const {
-          type,
-          data,
-          error,
-          content,
-          readTime,
-          parseTime,
-          totalTime,
-          validateTime,
-          errorTime,
-        } = e.data;
+        const { type, data, error, content } = e.data;
 
         if (type === "FILE_READ_SUCCESS") {
           setLeftContent(content);
         } else if (type === "PARSE_SUCCESS") {
-          setRightContent(data);
+          if (e.data.dataString) {
+            // Parse the stringified data
+            const parsedData = JSON.parse(e.data.dataString);
+            setRightContent(parsedData);
+          } else {
+            // Fallback for legacy format
+            setRightContent(data);
+          }
           setError(null);
           setIsLoading(false);
-
-          // Calculate stats
-          const jsonString = JSON.stringify(data);
-          const nodeCount = countNodes(data);
-
-          setJsonStats({
-            size: jsonString.length,
-            nodes: nodeCount,
-          });
         } else if (type === "PARSE_ERROR" || type === "FILE_READ_ERROR") {
           setError(error);
           setRightContent(null);
@@ -232,13 +272,19 @@ export default function JsonViewer() {
       };
 
       formatterWorker.onmessage = (e) => {
-        const { type, data, error } = e.data;
+        const { type, error } = e.data;
         setIsLoading(false);
 
         if (type === "FORMAT_SUCCESS") {
-          setLeftContent(data);
+          if (e.data.dataString) {
+            setLeftContent(e.data.dataString);
+          } else {
+            // Fallback for legacy format
+            setLeftContent(e.data.data);
+          }
           setError(null);
         } else if (type === "FORMAT_ERROR") {
+          console.error("Formatter worker error:", error);
           setError(error);
         }
       };
@@ -270,36 +316,6 @@ export default function JsonViewer() {
   }, []);
 
   // Count nodes in JSON for stats
-  const countNodes = useCallback(
-    (obj: any, visited = new WeakSet(), depth = 0): number => {
-      if (depth > 50) return 0; // Prevent infinite recursion
-      if (typeof obj !== "object" || obj === null) return 1;
-      if (visited.has(obj)) return 1; // Circular reference
-
-      visited.add(obj);
-      let count = 1;
-
-      try {
-        if (Array.isArray(obj)) {
-          count += obj.reduce(
-            (acc, item) => acc + countNodes(item, visited, depth + 1),
-            0
-          );
-        } else {
-          const keys = Object.keys(obj);
-          count += keys.reduce(
-            (acc, key) => acc + countNodes(obj[key], visited, depth + 1),
-            0
-          );
-        }
-      } catch (error) {
-        console.warn("Error counting nodes:", error);
-      }
-
-      return count;
-    },
-    []
-  );
 
   const handleLeftContentChange = useCallback((value: string) => {
     console.log("✏️ Main: Text input changed, starting parse");
@@ -367,7 +383,9 @@ export default function JsonViewer() {
   );
 
   const handleFormat = useCallback(() => {
-    if (!leftContent.trim()) return;
+    if (!leftContent.trim()) {
+      return;
+    }
 
     setIsLoading(true);
     const indent =
@@ -392,7 +410,9 @@ export default function JsonViewer() {
   }, [leftContent, indentType]);
 
   const handleDownload = useCallback(() => {
-    if (!leftContent) return;
+    if (!leftContent) {
+      return;
+    }
 
     try {
       const blob = new Blob([leftContent], { type: "application/json" });
@@ -420,7 +440,7 @@ export default function JsonViewer() {
             : indentType === "1-tab"
             ? "\t"
             : 2;
-        const formatted = JSON.stringify(rightContent, null, indent);
+        const formatted = safeStringify(rightContent, indent);
         navigator.clipboard.writeText(formatted);
       } catch (error) {
         setError("Failed to copy to clipboard");
@@ -506,7 +526,9 @@ export default function JsonViewer() {
   );
 
   const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return "0 Bytes";
+    if (bytes === 0) {
+      return "0 Bytes";
+    }
     const k = 1024;
     const sizes = ["Bytes", "KB", "MB", "GB"];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -515,7 +537,7 @@ export default function JsonViewer() {
     );
   };
 
-  return (
+  const content = (
     <div className="h-screen flex flex-col relative overflow-hidden">
       {/* Beautiful gradient background */}
       <div className="absolute inset-0 bg-gradient-to-br from-violet-50 via-blue-50 to-cyan-50 dark:from-gray-900 dark:via-blue-900 dark:to-violet-900">
@@ -743,4 +765,6 @@ export default function JsonViewer() {
       />
     </div>
   );
+
+  return content;
 }
