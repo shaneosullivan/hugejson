@@ -156,15 +156,15 @@ self.onmessage = (e) => {
 `;
 
 const jsonFormatterWorkerCode = `
-${stringify.toString()}
+const iterativeStringify = ${stringify.toString()}
 
-${consolidateBrackets.toString()}
+const consolidateBrackets = ${consolidateBrackets.toString()}
 
-${formatPrimitive.toString()}
+const formatPrimitive = ${formatPrimitive.toString()}
 
-${escapeString.toString()}
+const escapeString = ${escapeString.toString()}
 
-${safeStringify.toString()}
+const safeStringify = ${safeStringify.toString()}
 
 self.onmessage = (e) => {
   const { type, data, indent } = e.data
