@@ -42,7 +42,7 @@ async function buildWorker(filename) {
     // Try bun first, fallback to node if bun is not available
     const hasBun = (() => {
       try {
-        require.resolve('bun');
+        require.resolve("bun");
         return true;
       } catch {
         return false;
@@ -50,17 +50,35 @@ async function buildWorker(filename) {
     })();
 
     let buildCommand, buildArgs;
-    
+
     if (hasBun) {
       buildCommand = "bun";
-      buildArgs = ["build", tsFile, "--outfile", jsFile, "--target", "browser"];
+      buildArgs = [
+        "build",
+        tsFile,
+        "--outfile",
+        jsFile,
+        "--target",
+        "browser",
+        "--no-splitting",
+        "--minify",
+      ];
     } else {
-      // Fallback to using npx and esbuild (which Next.js uses)
+      // Fallback to using npx and esbuild with proper bundling for workers
       buildCommand = "npx";
-      buildArgs = ["esbuild", tsFile, "--outfile=" + jsFile, "--format=esm", "--target=es2020", "--platform=browser"];
+      buildArgs = [
+        "esbuild",
+        tsFile,
+        "--outfile=" + jsFile,
+        "--bundle", // Bundle all dependencies inline
+        "--format=iife", // Use IIFE format for workers (no imports/exports)
+        "--target=es2020",
+        "--platform=browser",
+        "--minify", // Minify for smaller files
+      ];
     }
-    
-    console.log(`  Command: ${buildCommand} ${buildArgs.join(' ')}`);
+
+    console.log(`  Command: ${buildCommand} ${buildArgs.join(" ")}`);
 
     const buildProcess = spawn(buildCommand, buildArgs, {
       stdio: "pipe",
@@ -107,19 +125,23 @@ async function buildAllWorkers() {
     console.log("🔍 Verifying built files:");
     for (const filename of workerFiles) {
       const jsFileName = filename.replace(".ts", ".js");
-      const tsFile = path.join(workersDir, filename);
       const jsFile = path.join(publicDir, "workers", jsFileName);
-      
+
       // Try both the expected path and check if bun created it elsewhere
       let actualFile = jsFile;
       if (!fs.existsSync(jsFile)) {
         // Check if it was created in the current working directory
-        const cwdFile = path.join(process.cwd(), "public", "workers", jsFileName);
+        const cwdFile = path.join(
+          process.cwd(),
+          "public",
+          "workers",
+          jsFileName
+        );
         if (fs.existsSync(cwdFile)) {
           actualFile = cwdFile;
         }
       }
-      
+
       if (fs.existsSync(actualFile)) {
         const stats = fs.statSync(actualFile);
         console.log(`✅ ${jsFileName} (${stats.size} bytes) at ${actualFile}`);
@@ -129,7 +151,7 @@ async function buildAllWorkers() {
         const workersDir = path.dirname(jsFile);
         if (fs.existsSync(workersDir)) {
           const files = fs.readdirSync(workersDir);
-          console.log(`📁 Workers directory contents: ${files.join(', ')}`);
+          console.log(`📁 Workers directory contents: ${files.join(", ")}`);
         } else {
           console.log(`📁 Workers directory doesn't exist: ${workersDir}`);
         }
