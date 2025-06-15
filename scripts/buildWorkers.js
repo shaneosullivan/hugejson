@@ -55,8 +55,28 @@ async function buildWorker(filename) {
 
 async function buildAllWorkers() {
   try {
+    // Ensure public/workers directory exists
+    const workersPublicDir = path.join(publicDir, "workers");
+    if (!fs.existsSync(workersPublicDir)) {
+      fs.mkdirSync(workersPublicDir, { recursive: true });
+      console.log("📁 Created public/workers directory");
+    }
+
     // Build all workers in parallel
     await Promise.all(workerFiles.map(buildWorker));
+
+    // Verify all files were created
+    console.log("🔍 Verifying built files:");
+    for (const filename of workerFiles) {
+      const jsFileName = filename.replace(".ts", ".js");
+      const jsFile = path.join(publicDir, "workers", jsFileName);
+      if (fs.existsSync(jsFile)) {
+        const stats = fs.statSync(jsFile);
+        console.log(`✅ ${jsFileName} (${stats.size} bytes)`);
+      } else {
+        console.error(`❌ Missing: ${jsFileName}`);
+      }
+    }
 
     console.log("🎉 All workers built and copied successfully!");
   } catch (error) {

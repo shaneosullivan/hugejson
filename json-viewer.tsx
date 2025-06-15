@@ -24,8 +24,28 @@ import { SearchResults } from "./components/search-results";
 import { Logo } from "./components/logo";
 import { safeStringify } from "./lib/iterativeStringify";
 
+async function verifyWorkerFile(path: string): Promise<boolean> {
+  try {
+    const response = await fetch(path);
+    const exists = response.ok;
+    console.log(`🔍 Worker file ${path}: ${exists ? 'exists' : 'NOT FOUND'} (status: ${response.status})`);
+    return exists;
+  } catch (error) {
+    console.error(`❌ Failed to verify worker file ${path}:`, error);
+    return false;
+  }
+}
+
 function createWorkerFromFile(path: string): Worker {
-  return new Worker(path);
+  try {
+    console.log(`🔧 Creating worker from: ${path}`);
+    const worker = new Worker(path);
+    console.log(`✅ Worker created successfully: ${path}`);
+    return worker;
+  } catch (error) {
+    console.error(`❌ Failed to create worker from ${path}:`, error);
+    throw error;
+  }
 }
 
 export default function JsonViewer() {
@@ -57,9 +77,21 @@ export default function JsonViewer() {
 
   // Initialize workers
   useEffect(() => {
-    try {
-      parserWorkerRef.current = createWorkerFromFile('/workers/json-parser.js');
-      formatterWorkerRef.current = createWorkerFromFile('/workers/json-formatter.js');
+    async function initWorkers() {
+      try {
+        console.log('🚀 Initializing workers...');
+        
+        // First verify the worker files exist
+        const parserExists = await verifyWorkerFile('/workers/json-parser.js');
+        const formatterExists = await verifyWorkerFile('/workers/json-formatter.js');
+        
+        if (!parserExists || !formatterExists) {
+          setError(`Worker files not found - Parser: ${parserExists}, Formatter: ${formatterExists}`);
+          return;
+        }
+        
+        parserWorkerRef.current = createWorkerFromFile('/workers/json-parser.js');
+        formatterWorkerRef.current = createWorkerFromFile('/workers/json-formatter.js');
 
       const parserWorker = parserWorkerRef.current;
       const formatterWorker = formatterWorkerRef.current;
@@ -117,10 +149,13 @@ export default function JsonViewer() {
         setIsLoading(false);
         setError("Formatter error occurred");
       };
-    } catch (error) {
-      console.error("Failed to initialize workers:", error);
-      setError("Failed to initialize workers");
+      } catch (error) {
+        console.error("Failed to initialize workers:", error);
+        setError("Failed to initialize workers");
+      }
     }
+
+    initWorkers();
 
     return () => {
       try {
