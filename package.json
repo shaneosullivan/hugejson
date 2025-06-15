@@ -4,11 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "PORT=3050 next dev & scripts/preDev.sh",
-    "build": "scripts/preExport.sh && next build && ./scripts/postBuild.sh",
-    "export": "scripts/preExport.sh && next build && ./scripts/postBuild.sh",
+    "build": "node scripts/buildWorkers.js && scripts/preExport.sh && next build && ./scripts/postBuild.sh",
+    "export": "node scripts/buildWorkers.js && scripts/preExport.sh && next build && ./scripts/postBuild.sh",
     "start": "next start",
     "lint": "next lint",
-    "test": "bun test"
+    "test": "bun test",
+    "build:workers": "node scripts/buildWorkers.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

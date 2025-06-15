@@ -30,3 +30,8 @@ data
 public/_next
 .next-build
 dist
+
+# generated worker files
+workers/*.js
+public/workers/
+tmp
