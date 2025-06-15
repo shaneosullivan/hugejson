@@ -8,11 +8,11 @@ const workersDir = path.join(__dirname, "../workers");
 const publicDir = path.join(__dirname, "../public");
 
 // Debug: Show current working directory and paths
-console.log("🔍 Build environment:");
-console.log("  Current working directory:", process.cwd());
-console.log("  Script directory:", __dirname);
-console.log("  Workers source directory:", workersDir);
-console.log("  Public output directory:", publicDir);
+// console.log("🔍 Build environment:");
+// console.log("  Current working directory:", process.cwd());
+// console.log("  Script directory:", __dirname);
+// console.log("  Workers source directory:", workersDir);
+// console.log("  Public output directory:", publicDir);
 const workerFiles = [
   "json-parser.ts",
   "json-formatter.ts",
