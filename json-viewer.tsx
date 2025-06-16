@@ -28,7 +28,11 @@ async function verifyWorkerFile(path: string): Promise<boolean> {
   try {
     const response = await fetch(path);
     const exists = response.ok;
-    console.log(`🔍 Worker file ${path}: ${exists ? 'exists' : 'NOT FOUND'} (status: ${response.status})`);
+    console.log(
+      `🔍 Worker file ${path}: ${exists ? "exists" : "NOT FOUND"} (status: ${
+        response.status
+      })`
+    );
     return exists;
   } catch (error) {
     console.error(`❌ Failed to verify worker file ${path}:`, error);
@@ -79,76 +83,84 @@ export default function JsonViewer() {
   useEffect(() => {
     async function initWorkers() {
       try {
-        console.log('🚀 Initializing workers...');
-        
+        console.log("🚀 Initializing workers...");
+
         // First verify the worker files exist
-        const parserExists = await verifyWorkerFile('/workers/json-parser.js');
-        const formatterExists = await verifyWorkerFile('/workers/json-formatter.js');
-        
+        const parserExists = await verifyWorkerFile("/workers/json-parser.js");
+        const formatterExists = await verifyWorkerFile(
+          "/workers/json-formatter.js"
+        );
+
         if (!parserExists || !formatterExists) {
-          setError(`Worker files not found - Parser: ${parserExists}, Formatter: ${formatterExists}`);
+          setError(
+            `Worker files not found - Parser: ${parserExists}, Formatter: ${formatterExists}`
+          );
           return;
         }
-        
-        parserWorkerRef.current = createWorkerFromFile('/workers/json-parser.js');
-        formatterWorkerRef.current = createWorkerFromFile('/workers/json-formatter.js');
 
-      const parserWorker = parserWorkerRef.current;
-      const formatterWorker = formatterWorkerRef.current;
+        parserWorkerRef.current = createWorkerFromFile(
+          "/workers/json-parser.js"
+        );
+        formatterWorkerRef.current = createWorkerFromFile(
+          "/workers/json-formatter.js"
+        );
 
-      parserWorker.onmessage = (e) => {
-        const { type, data, error, content } = e.data;
+        const parserWorker = parserWorkerRef.current;
+        const formatterWorker = formatterWorkerRef.current;
 
-        if (type === "FILE_READ_SUCCESS") {
-          setLeftContent(content);
-        } else if (type === "PARSE_SUCCESS") {
-          if (e.data.dataString) {
-            // Parse the stringified data
-            const parsedData = JSON.parse(e.data.dataString);
-            setRightContent(parsedData);
-          } else {
-            // Fallback for legacy format
-            setRightContent(data);
+        parserWorker.onmessage = (e) => {
+          const { type, data, error, content } = e.data;
+
+          if (type === "FILE_READ_SUCCESS") {
+            setLeftContent(content);
+          } else if (type === "PARSE_SUCCESS") {
+            if (e.data.dataString) {
+              // Parse the stringified data
+              const parsedData = JSON.parse(e.data.dataString);
+              setRightContent(parsedData);
+            } else {
+              // Fallback for legacy format
+              setRightContent(data);
+            }
+            setError(null);
+            setIsLoading(false);
+          } else if (type === "PARSE_ERROR" || type === "FILE_READ_ERROR") {
+            setError(error);
+            setRightContent(null);
+            setJsonStats(null);
+            setIsLoading(false);
           }
-          setError(null);
-          setIsLoading(false);
-        } else if (type === "PARSE_ERROR" || type === "FILE_READ_ERROR") {
-          setError(error);
-          setRightContent(null);
-          setJsonStats(null);
-          setIsLoading(false);
-        }
-      };
+        };
 
-      formatterWorker.onmessage = (e) => {
-        const { type, error } = e.data;
-        setIsLoading(false);
+        formatterWorker.onmessage = (e) => {
+          const { type, error } = e.data;
+          setIsLoading(false);
 
-        if (type === "FORMAT_SUCCESS") {
-          if (e.data.dataString) {
-            setLeftContent(e.data.dataString);
-          } else {
-            // Fallback for legacy format
-            setLeftContent(e.data.data);
+          if (type === "FORMAT_SUCCESS") {
+            if (e.data.dataString) {
+              setLeftContent(e.data.dataString);
+            } else {
+              // Fallback for legacy format
+              setLeftContent(e.data.data);
+            }
+            setError(null);
+          } else if (type === "FORMAT_ERROR") {
+            console.error("Formatter worker error:", error);
+            setError(error);
           }
-          setError(null);
-        } else if (type === "FORMAT_ERROR") {
+        };
+
+        parserWorker.onerror = (error) => {
+          console.error("Parser worker error:", error);
+          setIsLoading(false);
+          setError("Worker error occurred");
+        };
+
+        formatterWorker.onerror = (error) => {
           console.error("Formatter worker error:", error);
-          setError(error);
-        }
-      };
-
-      parserWorker.onerror = (error) => {
-        console.error("Parser worker error:", error);
-        setIsLoading(false);
-        setError("Worker error occurred");
-      };
-
-      formatterWorker.onerror = (error) => {
-        console.error("Formatter worker error:", error);
-        setIsLoading(false);
-        setError("Formatter error occurred");
-      };
+          setIsLoading(false);
+          setError("Formatter error occurred");
+        };
       } catch (error) {
         console.error("Failed to initialize workers:", error);
         setError("Failed to initialize workers");
@@ -222,6 +234,7 @@ export default function JsonViewer() {
               parserWorkerRef.current?.postMessage({
                 type: "READ_AND_PARSE_FILE",
                 file: file,
+                indent: getIndentSize(indentType),
               });
             } catch (error) {
               setIsLoading(false);
@@ -231,8 +244,18 @@ export default function JsonViewer() {
         });
       }
     },
-    []
+    [indentType]
   );
+
+  function getIndentSize(indentType: string) {
+    return indentType === "2-spaces"
+      ? 2
+      : indentType === "4-spaces"
+      ? 4
+      : indentType === "1-tab"
+      ? "\t"
+      : 2;
+  }
 
   const handleFormat = useCallback(() => {
     if (!leftContent.trim()) {
@@ -240,14 +263,7 @@ export default function JsonViewer() {
     }
 
     setIsLoading(true);
-    const indent =
-      indentType === "2-spaces"
-        ? 2
-        : indentType === "4-spaces"
-        ? 4
-        : indentType === "1-tab"
-        ? "\t"
-        : 2;
+    const indent = getIndentSize(indentType);
 
     try {
       formatterWorkerRef.current?.postMessage({
@@ -284,14 +300,8 @@ export default function JsonViewer() {
   const handleCopyFormatted = useCallback(() => {
     if (rightContent) {
       try {
-        const indent =
-          indentType === "2-spaces"
-            ? 2
-            : indentType === "4-spaces"
-            ? 4
-            : indentType === "1-tab"
-            ? "\t"
-            : 2;
+        const indent = getIndentSize(indentType);
+
         const formatted = safeStringify(rightContent, indent);
         navigator.clipboard.writeText(formatted);
       } catch (error) {
@@ -365,6 +375,7 @@ export default function JsonViewer() {
               parserWorkerRef.current?.postMessage({
                 type: "READ_AND_PARSE_FILE",
                 file: file,
+                indent: getIndentSize(indentType),
               });
             } catch (error) {
               setIsLoading(false);
@@ -374,7 +385,7 @@ export default function JsonViewer() {
         });
       }
     },
-    [handleLeftContentChange]
+    [handleLeftContentChange, indentType]
   );
 
   const formatFileSize = (bytes: number) => {
