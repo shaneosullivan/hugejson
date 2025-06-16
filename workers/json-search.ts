@@ -20,7 +20,7 @@ self.onmessage = (e) => {
     switch (type) {
       case "SEARCH_JSON":
         const matches = findMatches(data, searchTerm, caseSensitive, fullWord);
-        const stringifyResult = safeStringify(matches);
+        const stringifyResult = safeStringify(matches as any);
         self.postMessage({
           type: "SEARCH_SUCCESS",
           matchesString: stringifyResult,

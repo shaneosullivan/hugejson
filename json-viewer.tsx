@@ -565,7 +565,7 @@ export default function JsonViewer() {
           </div>
 
           {/* Center Controls */}
-          <div className="w-20 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-r border-gray-200/50 dark:border-gray-700/50 flex flex-col items-center py-6 space-y-4">
+          <div className="w-20 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-r border-gray-200/50 dark:border-gray-700/50 flex flex-col items-center py-3 space-y-4">
             <Button
               size="sm"
               variant="ghost"
