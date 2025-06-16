@@ -23,16 +23,13 @@ import {
 import { SearchResults } from "./components/search-results";
 import { Logo } from "./components/logo";
 import { safeStringify } from "./lib/iterativeStringify";
+import Analytics from "./components/analytics";
 
 async function verifyWorkerFile(path: string): Promise<boolean> {
   try {
     const response = await fetch(path);
     const exists = response.ok;
-    console.log(
-      `🔍 Worker file ${path}: ${exists ? "exists" : "NOT FOUND"} (status: ${
-        response.status
-      })`
-    );
+
     return exists;
   } catch (error) {
     console.error(`❌ Failed to verify worker file ${path}:`, error);
@@ -42,9 +39,7 @@ async function verifyWorkerFile(path: string): Promise<boolean> {
 
 function createWorkerFromFile(path: string): Worker {
   try {
-    console.log(`🔧 Creating worker from: ${path}`);
     const worker = new Worker(path);
-    console.log(`✅ Worker created successfully: ${path}`);
     return worker;
   } catch (error) {
     console.error(`❌ Failed to create worker from ${path}:`, error);
@@ -83,8 +78,6 @@ export default function JsonViewer() {
   useEffect(() => {
     async function initWorkers() {
       try {
-        console.log("🚀 Initializing workers...");
-
         // First verify the worker files exist
         const parserExists = await verifyWorkerFile("/workers/json-parser.js");
         const formatterExists = await verifyWorkerFile(
@@ -182,7 +175,6 @@ export default function JsonViewer() {
   // Count nodes in JSON for stats
 
   const handleLeftContentChange = useCallback((value: string) => {
-    console.log("✏️ Main: Text input changed, starting parse");
     performanceTimerRef.current = performance.now();
 
     setLeftContent(value);
@@ -626,6 +618,7 @@ export default function JsonViewer() {
         onChange={handleFileChange}
         className="hidden"
       />
+      <Analytics />
     </div>
   );
 
