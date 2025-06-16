@@ -1,4 +1,4 @@
-import { safeStringify } from '../lib/iterativeStringify';
+import { safeStringify } from "../lib/iterativeStringify";
 
 interface SearchMatch {
   path: string;
@@ -39,13 +39,23 @@ self.onmessage = (e) => {
   }
 };
 
-function findMatches(obj: any, searchTerm: string, caseSensitive: boolean, fullWord: boolean): SearchMatch[] {
+function findMatches(
+  obj: any,
+  searchTerm: string,
+  caseSensitive: boolean,
+  fullWord: boolean
+): SearchMatch[] {
   if (!searchTerm || !obj) return [];
 
   const matches: SearchMatch[] = [];
   const searchTermToUse = caseSensitive ? searchTerm : searchTerm.toLowerCase();
 
-  function matchesText(text: string, searchTerm: string, caseSensitive: boolean, fullWord: boolean): boolean {
+  function matchesText(
+    text: string,
+    searchTerm: string,
+    caseSensitive: boolean,
+    fullWord: boolean
+  ): boolean {
     const textToSearch = caseSensitive ? text : text.toLowerCase();
 
     if (fullWord) {
@@ -77,7 +87,11 @@ function findMatches(obj: any, searchTerm: string, caseSensitive: boolean, fullW
       .replace(/\]/g, "\\]");
   }
 
-  function searchInValue(value: any, path: string, key: string | number | null = null): void {
+  function searchInValue(
+    value: any,
+    path: string,
+    key: string | number | null = null
+  ): void {
     // Check if key matches (for object properties)
     if (key !== null && typeof key === "string") {
       if (matchesText(key, searchTermToUse, caseSensitive, fullWord)) {

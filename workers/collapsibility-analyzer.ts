@@ -1,4 +1,4 @@
-import { safeStringify } from '../lib/iterativeStringify';
+import { safeStringify } from "../lib/iterativeStringify";
 
 interface CollapsibilityResult {
   path: string;
@@ -7,7 +7,11 @@ interface CollapsibilityResult {
   children: CollapsibilityResult[];
 }
 
-function analyzeCollapsibility(obj: any, path: string = "", level: number = 0): CollapsibilityResult {
+function analyzeCollapsibility(
+  obj: any,
+  path: string = "",
+  level: number = 0
+): CollapsibilityResult {
   const result: CollapsibilityResult = {
     path,
     level,
