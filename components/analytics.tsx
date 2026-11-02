@@ -12,20 +12,14 @@ export default function Analytics() {
   if (isDevServer()) {
     return null;
   }
+  // Self-hosted Umami (https://chofterstats.com). data-domains stops
+  // preview deployments from being counted.
   return (
-    <>
-      <script
-        async
-        defer
-        src="https://scripts.simpleanalyticscdn.com/latest.js"
-      ></script>
-      <noscript>
-        <img
-          src="https://queue.simpleanalyticscdn.com/noscript.gif"
-          alt=""
-          referrerPolicy="no-referrer-when-downgrade"
-        />
-      </noscript>
-    </>
+    <script
+      defer
+      src="https://chofterstats.com/cs.js"
+      data-website-id="358d7fd8-e65b-434c-b9e7-384180f4e507"
+      data-domains="hugejson.chofter.com"
+    ></script>
   );
 }
