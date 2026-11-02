@@ -9,9 +9,6 @@ const nextConfig = {
   trailingSlash: true,
   skipTrailingSlashRedirect: true,
   distDir: process.env.NODE_ENV === "production" ? "dist" : ".next-build",
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   typescript: {
     ignoreBuildErrors: true,
     tsconfigPath:
